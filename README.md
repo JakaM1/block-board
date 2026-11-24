@@ -2,6 +2,8 @@
 
 [![CI/CD](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml)
 
+[Javni demo na Renderju](https://blockboard-jakam1.onrender.com)
+
 BlockBoard je spletna aplikacija za vodenje najemniške stavbe, v kateri ima vsa stanovanja en lastnik. Na enem mestu vodi celotno najemno razmerje, od vselitve do vračila varščine:
 
 - najeme z življenjskim ciklom in več sostanovalci,
@@ -132,10 +134,12 @@ Workflow se sproži ob pull requestu v `main` in ob pushu na `main`. Za združit
 
 ### Nastavitev Render
 
-1. Po prvi združitvi v `main` opravilo `deploy` objavi sliko `ghcr.io/jakam1/block-board:<SHA>`. Ustvari Render PostgreSQL in plačljivo spletno storitev **Web Service** v isti regiji. Kot vir izberi **Existing Image** in uporabi URL te slike. Renderju omogoči branje slike z žetonom GitHub s pravico `read:packages` ali paket v GHCR nastavi kot javen. Nastavi zdravstveni pregled na `/up`. [Predpripravljene slike na Renderju](https://render.com/docs/deploying-an-image)
-2. Storitvi dodaj trajni disk, priklopljen na `/var/www/backend/storage/app/private`, da fotografije okvar ostanejo dostopne po ponovni namestitvi. Uporabi eno instanco, na kateri tečejo Apache, delavec vrste in razporejevalnik. [Trajni diski](https://render.com/docs/disks)
-3. V Renderju nastavi okoljske spremenljivke iz spodnje tabele. Aplikacija ob zagonu izvede migracije. Prvič v bazi pripravi dejanske podatke o stavbi, stanovanjih in lastniku z vlogo `landlord` v tabeli članstev. Demo podatki iz lokalnega seederja imajo znana gesla, zato naj ostanejo v lokalnem okolju.
-4. V okolju `production` v forku dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Nato v prvem zagonu za `main` ponovno zaženi opravilo `deploy` ali združi naslednji pull request. Po uspehu se javni URL prikaže pri namestitvi, nato ga dodaj v README. [Render API](https://render.com/docs/api)
+Javni demo teče v Frankfurtu na brezplačni spletni storitvi in brezplačni bazi PostgreSQL. Baza poteče po 30 dneh. Po mirovanju lahko prvi dostop traja dlje, fotografije pa se ob ponovni namestitvi ne ohranijo. Pošiljanje e-pošte je nastavljeno na dnevnik aplikacije. [Omejitve brezplačnega paketa](https://render.com/docs/free)
+
+1. Po prvi združitvi v `main` opravilo `deploy` objavi sliko `ghcr.io/jakam1/block-board:<SHA>`. Ustvari Render PostgreSQL in **Web Service** v isti regiji. Pri spletni storitvi izberi **Existing Image** in uporabi URL te slike. Nastavi zdravstveni pregled na `/up`. [Predpripravljene slike na Renderju](https://render.com/docs/deploying-an-image)
+2. Na plačljivem paketu lahko priklopiš trajni disk na `/var/www/backend/storage/app/private`, da se fotografije ohranijo ob ponovni namestitvi. Apache, delavec vrste in razporejevalnik tečejo v istem vsebniku. [Trajni diski](https://render.com/docs/disks)
+3. V Renderju nastavi okoljske spremenljivke iz spodnje tabele. Aplikacija ob zagonu izvede migracije. Za prijavo v novi bazi pripravi podatke o stavbi in lastniški račun s svojim geslom. Lokalni demo računi imajo javno znano geslo in so namenjeni lokalnemu zagonu.
+4. V okolju `production` v forku dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Ključ potrebuje dostop za branje konfiguracije spletne storitve ter zagon in spremljanje namestitev. Po nastavitvi ponovno zaženi neuspešno opravilo `deploy` ali združi naslednji pull request. [Pravice ključa API](https://render.com/docs/api-keys#permissions)
 
 Vue se zgradi z `VITE_API_URL=/`. Apache na istem javnem izvoru postreže Vue in posreduje zahteve Laravelu. Tako Sanctum uporablja sejne piškotke na isti domeni.
 
@@ -148,7 +152,7 @@ Vue se zgradi z `VITE_API_URL=/`. Apache na istem javnem izvoru postreže Vue in
 | `APP_NAME`, `APP_LOCALE`, `APP_TIMEZONE` | `BlockBoard`, `sl`, `Europe/Ljubljana`. |
 | `DB_CONNECTION`, `DB_URL` | `pgsql` ter interni povezovalni URL baze PostgreSQL. |
 | `SESSION_DRIVER`, `QUEUE_CONNECTION`, `CACHE_STORE` | `database` za vse tri. |
-| `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | `smtp` in podatki ponudnika SMTP za povabila in obvestila. |
+| `MAIL_MAILER` | `log` za demo. Za pošiljanje povabil in obvestil nastavi `smtp` ter podatke ponudnika v `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` in `MAIL_FROM_ADDRESS`. |
 
 ## Struktura repozitorija
 
