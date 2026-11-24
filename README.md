@@ -62,14 +62,14 @@ git clone https://github.com/klemencic/block-board.git
 cd block-board
 
 cp backend/.env.example backend/.env
-docker compose build
+docker compose build api
 docker compose run --rm api composer install
 docker compose up -d
 docker compose exec api php artisan key:generate
 docker compose exec api php artisan migrate --seed
 ```
 
-Prvi zagon traja nekaj minut, ker se prenesejo slike in odvisnosti. Storitev `web` ob zagonu sama izvede `npm install`, zato je aplikacija na voljo približno minuto po ukazu `docker compose up -d` (napredek: `docker compose logs -f web`).
+Storitvi `api` in `worker` uporabljata isto PHP sliko, zato jo zgradimo enkrat. Prvi zagon traja nekaj minut, ker se prenesejo slike in odvisnosti. Storitev `web` ob zagonu sama izvede `npm install`, napredek pa lahko spremljate z `docker compose logs -f web`.
 
 | Naslov | Vsebina |
 | --- | --- |
