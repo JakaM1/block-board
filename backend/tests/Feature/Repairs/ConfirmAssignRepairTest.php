@@ -2,6 +2,7 @@
 
 use App\Enums\RepairStatus;
 use App\Enums\Role;
+use App\Models\Building;
 use App\Models\RepairEvent;
 use App\Notifications\RepairAssigned;
 use App\Notifications\RepairStatusChanged;
@@ -88,7 +89,7 @@ it('potrdi in dodeli izvajalcu v enem koraku (WF-03)', function () {
 });
 
 it('izbira vsebuje samo izvajalce, povabljene v stavbo', function () {
-    $outsider = memberOf(\App\Models\Building::factory()->create(), Role::Contractor);
+    $outsider = memberOf(Building::factory()->create(), Role::Contractor);
     $this->actingAs($this->f->landlord)->postJson("{$this->url}/confirm");
 
     $this->actingAs($this->f->landlord)->postJson("{$this->url}/assign", ['contractor_id' => $outsider->id])

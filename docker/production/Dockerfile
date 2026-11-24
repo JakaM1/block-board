@@ -4,6 +4,8 @@ WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+ARG VITE_API_URL=/
+ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
 FROM php:8.4-apache-bookworm
@@ -21,10 +23,14 @@ COPY docker/production/supervisord.conf /etc/supervisor/supervisord.conf
 COPY --chmod=755 docker/production/start.sh /usr/local/bin/blockboard-start
 
 WORKDIR /var/www/backend
+ENV COMPOSER_ALLOW_SUPERUSER=1
+COPY backend/composer.json backend/composer.lock ./
+RUN composer install --no-dev --no-interaction --prefer-dist --no-progress --no-scripts
+
 COPY backend/ ./
 COPY --from=frontend /build/dist/ public/
 RUN mkdir -p storage/app/private storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
-    && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader \
+    && composer dump-autoload --no-dev --optimize --no-interaction \
     && chown -R www-data:www-data storage bootstrap/cache
 
 ENV APP_ENV=production APP_DEBUG=false LOG_CHANNEL=stderr

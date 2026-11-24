@@ -5,6 +5,7 @@ use App\Enums\Payer;
 use App\Enums\RepairStatus;
 use App\Models\Attachment;
 use App\Models\Charge;
+use App\Models\Lease;
 use App\Notifications\RepairReturned;
 use App\Services\RepairWorkflow;
 use Illuminate\Http\UploadedFile;
@@ -101,7 +102,7 @@ it('če je plačnik najemnik, se prijavitelju privzeto doda obveznost popravila 
 it('lastnik lahko izbere drugega najemnika stanovanja, ne pa najemnika drugega stanovanja', function () {
     $f = doneRepair('tenant');
     $roommate = $f->lease->tenants[1];
-    $foreign = \App\Models\Lease::factory()->withTenants()->create(['status' => 'active'])->tenants[0];
+    $foreign = Lease::factory()->withTenants()->create(['status' => 'active'])->tenants[0];
 
     $this->actingAs($f->landlord)->postJson("{$f->url}/close", ['lease_tenant_id' => $foreign->id])
         ->assertUnprocessable()->assertJsonValidationErrors('lease_tenant_id');

@@ -8,6 +8,7 @@ use App\Models\Building;
 use App\Models\Charge;
 use App\Models\Lease;
 use App\Models\LeaseTenant;
+use Carbon\Carbon;
 
 beforeEach(function () {
     $this->building = Building::factory()->create();
@@ -98,11 +99,11 @@ it('današnji dan določa časovni pas stavbe (Europe/Ljubljana)', function () {
     $charge = charge($this->me, ['due_date' => '2027-05-08']);
 
     // 8. 5. ob 23:30 v Ljubljani (21:30 UTC) rok še ni pretekel.
-    $this->travelTo(\Carbon\Carbon::parse('2027-05-08 21:30', 'UTC'));
+    $this->travelTo(Carbon::parse('2027-05-08 21:30', 'UTC'));
     expect($charge->fresh()->status())->toBe('open');
 
     // 9. 5. ob 00:30 v Ljubljani (8. 5. 22:30 UTC) obveznost zamuja 1 dan.
-    $this->travelTo(\Carbon\Carbon::parse('2027-05-08 22:30', 'UTC'));
+    $this->travelTo(Carbon::parse('2027-05-08 22:30', 'UTC'));
     expect($charge->fresh()->status())->toBe('overdue')
         ->and($charge->fresh()->daysOverdue())->toBe(1);
 });

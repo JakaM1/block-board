@@ -7,7 +7,6 @@ use App\Enums\LeaseStatus;
 use App\Models\Charge;
 use App\Models\Lease;
 use App\Models\LeaseTenant;
-use App\Models\User;
 use App\Notifications\MonthlyStatement;
 use App\Support\Dates;
 use Carbon\CarbonImmutable;

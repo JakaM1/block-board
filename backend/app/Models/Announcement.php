@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Announcement extends Model
 {
@@ -42,7 +43,7 @@ class Announcement extends Model
      * (samo nadstropje obvestila, brez praznih stanovanj). Stanovanje je obveščeno,
      * ko branje potrdi vsaj en njegov najemnik.
      *
-     * @return array{informed: \Illuminate\Support\Collection<int, int>, uninformed: \Illuminate\Support\Collection<int, int>}
+     * @return array{informed: Collection<int, int>, uninformed: Collection<int, int>}
      */
     public function informedApartments(): array
     {

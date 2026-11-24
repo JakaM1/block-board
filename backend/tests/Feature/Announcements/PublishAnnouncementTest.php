@@ -10,6 +10,7 @@ use App\Models\Lease;
 use App\Models\Membership;
 use App\Notifications\AnnouncementPublished;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     $this->building = Building::factory()->create(['name' => 'Stavba Lipa']);
@@ -27,7 +28,7 @@ beforeEach(function () {
     [$this->jan, $this->nik] = [$first->tenants[0]->user, $first->tenants[1]->user];
 });
 
-function publish(array $data): \Illuminate\Testing\TestResponse
+function publish(array $data): TestResponse
 {
     return test()->actingAs(test()->landlord)->postJson('/api/buildings/'.test()->building->id.'/announcements', $data);
 }

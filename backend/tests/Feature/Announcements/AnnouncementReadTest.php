@@ -10,6 +10,7 @@ use App\Models\Lease;
 use App\Models\Membership;
 use App\Services\AnnouncementService;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     Notification::fake();
@@ -39,7 +40,7 @@ beforeEach(function () {
     $this->floor1 = $this->service->publish($this->building, $this->landlord, ['title' => 'Pleskanje', 'body' => 'y', 'floor' => 1]);
 });
 
-function readAs($user, Announcement $a): \Illuminate\Testing\TestResponse
+function readAs($user, Announcement $a): TestResponse
 {
     return test()->actingAs($user)->postJson("/api/announcements/{$a->id}/read");
 }

@@ -1,17 +1,18 @@
 name: CI/CD
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Frontend
+  lint:
+    name: lint
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -19,56 +20,29 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
-
-  backend:
-    name: Backend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_DB: blockboard_test
-          POSTGRES_USER: blockboard
-          POSTGRES_PASSWORD: ci-test-password
-        ports:
-          - 5432/tcp
-        options: >-
-          --health-cmd "pg_isready -U blockboard -d blockboard_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DB_HOST: 127.0.0.1
-      DB_USERNAME: blockboard
-      DB_PASSWORD: ci-test-password
-    steps:
-      - uses: actions/checkout@v6
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, gd, zip
           coverage: none
           tools: composer:v2
-      - run: composer install --no-interaction --prefer-dist --no-progress
-      - name: Lint PHP
-        run: git ls-files -z -- '*.php' | xargs -0 -n1 php -l
-      - name: Prepare Laravel
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-php84-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php84-
+      - name: ESLint
+        working-directory: frontend
         run: |
-          cp .env.example .env
-          php artisan key:generate
-      - run: vendor/bin/pest
-        env:
-          DB_PORT: ${{ job.services.postgres.ports['5432'] }}
+          npm ci
+          npm run lint
+      - name: Laravel Pint
+        working-directory: backend
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          vendor/bin/pint --test
 
-  image:
-    name: Production image
+  build:
+    name: build
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -86,8 +60,19 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v6
-      - name: Build Docker image
-        run: docker build -f docker/production/Dockerfile -t blockboard-ci .
+      - uses: docker/setup-buildx-action@v4
+      - name: Build Vue and package Laravel
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/production/Dockerfile
+          platforms: linux/amd64
+          build-args: VITE_API_URL=/
+          load: true
+          tags: blockboard:${{ github.sha }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Smoke test the production image
         env:
           DB_PORT: ${{ job.services.postgres.ports['5432'] }}
@@ -98,7 +83,7 @@ jobs:
             -e APP_URL=http://127.0.0.1:10000 -e SANCTUM_STATEFUL_DOMAINS=127.0.0.1:10000 \
             -e DB_CONNECTION=pgsql -e DB_HOST=127.0.0.1 -e DB_PORT \
             -e DB_DATABASE=blockboard -e DB_USERNAME=blockboard -e DB_PASSWORD=ci-test-password \
-            blockboard-ci
+            "blockboard:$GITHUB_SHA"
           trap 'docker logs blockboard-ci; docker rm --force blockboard-ci' EXIT
           base=http://127.0.0.1:10000
           curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 2 "$base/up" > /dev/null
@@ -109,24 +94,103 @@ jobs:
           status=$(curl --silent --show-error --header 'Accept: application/json' \
             --output /dev/null --write-out '%{http_code}' "$base/api/me")
           test "$status" = 401
+      - name: Export the tested image
+        run: docker save "blockboard:$GITHUB_SHA" | gzip > blockboard-image.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: blockboard-image
+          path: blockboard-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: blockboard_test
+          POSTGRES_USER: blockboard
+          POSTGRES_PASSWORD: ci-test-password
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U blockboard -d blockboard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, gd, zip
+          coverage: pcov
+          tools: composer:v2
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ runner.os }}-php84-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php84-
+      - run: npm ci
+        working-directory: frontend
+      - name: Prepare Laravel
+        working-directory: backend
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          cp .env.example .env
+          php artisan key:generate
+      - name: Vitest with coverage
+        working-directory: frontend
+        run: npm run test:coverage
+      - name: Pest with coverage
+        if: ${{ !cancelled() }}
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ job.services.postgres.ports['5432'] }}
+          DB_USERNAME: blockboard
+          DB_PASSWORD: ci-test-password
+        run: vendor/bin/pest --coverage --coverage-clover coverage/clover.xml --coverage-html coverage/html
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage
+          path: |
+            frontend/coverage/
+            backend/coverage/
+          if-no-files-found: error
 
   deploy:
-    name: Deploy to Render
-    needs: [frontend, backend, image]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    name: deploy
+    needs: [lint, build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: production
+    permissions:
+      contents: read
+      packages: write
+    environment:
+      name: production
+      url: ${{ steps.render.outputs.url }}
     concurrency:
       group: blockboard-production
       cancel-in-progress: false
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
     steps:
-      - name: Deploy the verified commit
-        shell: bash
+      - uses: actions/download-artifact@v8
+        with:
+          name: blockboard-image
+      - name: Publish the verified image
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGISTRY_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           latest_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
@@ -134,26 +198,46 @@ jobs:
             echo "A newer commit is on main. Skipping this deployment."
             exit 0
           fi
-
+          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
+          image="$registry:$GITHUB_SHA"
+          docker load -i blockboard-image.tar.gz
+          docker tag "blockboard:$GITHUB_SHA" "$image"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"
+          digest_ref=$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")
+          [[ "$digest_ref" == "$registry@sha256:"* ]]
+          echo "ref=$digest_ref" >> "$GITHUB_OUTPUT"
+      - name: Deploy and verify on Render
+        id: render
+        if: steps.image.outputs.ref != ''
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
           if [[ -z "$RENDER_API_KEY" || -z "$RENDER_SERVICE_ID" ]]; then
             echo "::error::Configure RENDER_API_KEY and RENDER_SERVICE_ID in the production environment."
             exit 1
           fi
-
           render_api() {
             curl --fail --silent --show-error --max-time 30 \
               --header "Authorization: Bearer $RENDER_API_KEY" "$@"
           }
-
-          endpoint="https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys"
-          payload=$(jq -nc --arg sha "$GITHUB_SHA" '{commitId: $sha}')
-          deploy_id=$(render_api --json "$payload" "$endpoint" | jq -er '.id')
-
+          service="https://api.render.com/v1/services/$RENDER_SERVICE_ID"
+          payload=$(jq -nc --arg image "$IMAGE_REF" '{imageUrl: $image}')
+          deploy_id=$(render_api --json "$payload" "$service/deploys" | jq -er '.id')
           for attempt in {1..80}; do
-            status=$(render_api "$endpoint/$deploy_id" | jq -er '.status')
+            status=$(render_api "$service/deploys/$deploy_id" | jq -er '.status')
             echo "Render deployment status: $status"
             case "$status" in
-              live) exit 0 ;;
+              live)
+                url=$(render_api "$service" | jq -er '.serviceDetails.url')
+                curl --fail --silent --show-error --max-time 30 "$url/up" > /dev/null
+                curl --fail --silent --show-error --max-time 30 "$url/" | grep -F '<div id="app"></div>'
+                echo "url=$url" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
               build_failed|pre_deploy_failed|update_failed|canceled|deactivated) exit 1 ;;
             esac
             sleep 15

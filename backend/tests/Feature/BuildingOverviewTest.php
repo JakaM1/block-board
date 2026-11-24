@@ -9,6 +9,7 @@ use App\Models\Apartment;
 use App\Models\Building;
 use App\Models\Charge;
 use App\Models\Lease;
+use App\Models\Membership;
 use App\Models\RepairCategory;
 use App\Models\RepairRequest;
 
@@ -111,7 +112,7 @@ it('podrobnosti stanovanja vrnejo trenutni najem, zamude in odprte prijave', fun
 
 it('pregled stavbe vidi samo lastnik', function () {
     $tenant = $this->lease2a->tenants[0]->user;
-    \App\Models\Membership::create(['user_id' => $tenant->id, 'building_id' => $this->building->id, 'role' => Role::Tenant]);
+    Membership::create(['user_id' => $tenant->id, 'building_id' => $this->building->id, 'role' => Role::Tenant]);
 
     $this->actingAs($tenant)->getJson("/api/buildings/{$this->building->id}/overview")->assertForbidden();
     $this->actingAs($tenant)->getJson("/api/apartments/{$this->a2->id}")->assertForbidden();

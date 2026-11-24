@@ -1,5 +1,7 @@
 # BlockBoard
 
+[![CI/CD](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml)
+
 BlockBoard je spletna aplikacija za vodenje najemniške stavbe, v kateri ima vsa stanovanja en lastnik. Na enem mestu vodi celotno najemno razmerje, od vselitve do vračila varščine:
 
 - najeme z življenjskim ciklom in več sostanovalci,
@@ -119,14 +121,23 @@ Veja `main` je zaščitena. Spremembe se razvijajo na ločenih vejah in se v `ma
 
 ## CI/CD
 
-GitHub Actions ob vsakem pushu in pull requestu izvede ESLint, preverjanje sintakse PHP, gradnjo Vue in produkcijske Docker slike ter teste Vitest in Pest. Produkcijska slika se za preverjanje zagona zažene s svežo bazo PostgreSQL. Uspešen cikel na veji `main` prek API-ja Render namesti preverjeni commit in počaka na stanje `live`.
+Workflow se sproži ob pull requestu v `main` in ob pushu na `main`. Za združitev so obvezna opravila `lint`, `build` in `test`.
+
+| Opravilo | Kaj izvede |
+| --- | --- |
+| `lint` | Preveri Vue in TypeScript z ESLint ter PHP z Laravel Pint. |
+| `build` | Zgradi Vue in zapakira Laravel z odvisnostmi v Docker sliko. Po poskusnem zagonu s PostgreSQL shrani sliko v artefakt `blockboard-image`. Gradnje ponovno uporabijo predpomnjene Docker plasti. |
+| `test` | Zažene Vitest in Pest s testno bazo PostgreSQL. Poročili o pokritosti shrani v artefakt `coverage`. Namestitvi odvisnosti uporabljata predpomnilnika npm in Composer. |
+| `deploy` | Samo ob pushu na `main` po uspešnih preverjanjih prenese artefakt `blockboard-image`, ga objavi v GHCR in Renderju posreduje digest slike. Po stanju `live` preveri javni naslov in ga objavi v [okolju production](https://github.com/JakaM1/block-board/deployments/production). |
 
 ### Nastavitev Render
 
-1. Ustvari Render PostgreSQL in plačljivo spletno storitev **Web Service** v isti regiji. Uporabi okolje **Docker**, repozitorij svojega forka, vejo `main`, Dockerfile `docker/production/Dockerfile` in koren repozitorija kot kontekst gradnje. Izklopi **Auto-Deploy** in nastavi zdravstveni pregled na `/up`. [Docker na Renderju](https://render.com/docs/docker)
+1. Po prvi združitvi v `main` opravilo `deploy` objavi sliko `ghcr.io/jakam1/block-board:<SHA>`. Ustvari Render PostgreSQL in plačljivo spletno storitev **Web Service** v isti regiji. Kot vir izberi **Existing Image** in uporabi URL te slike. Renderju omogoči branje slike z žetonom GitHub s pravico `read:packages` ali paket v GHCR nastavi kot javen. Nastavi zdravstveni pregled na `/up`. [Predpripravljene slike na Renderju](https://render.com/docs/deploying-an-image)
 2. Storitvi dodaj trajni disk, priklopljen na `/var/www/backend/storage/app/private`, da fotografije okvar ostanejo dostopne po ponovni namestitvi. Uporabi eno instanco, na kateri tečejo Apache, delavec vrste in razporejevalnik. [Trajni diski](https://render.com/docs/disks)
 3. V Renderju nastavi okoljske spremenljivke iz spodnje tabele. Aplikacija ob zagonu izvede migracije. Prvič v bazi pripravi dejanske podatke o stavbi, stanovanjih in lastniku z vlogo `landlord` v tabeli članstev. Demo podatki iz lokalnega seederja imajo znana gesla, zato naj ostanejo v lokalnem okolju.
-4. V forku v **Settings → Environments** ustvari okolje `production` in mu dovoli namestitve z veje `main`. Dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Če je `main` ob povezavi storitve že posodobljen, zaženi **CI/CD → Run workflow** za `main` in preveri rezultat opravila **Deploy to Render**. [Render API](https://render.com/docs/api)
+4. V okolju `production` v forku dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Nato v prvem zagonu za `main` ponovno zaženi opravilo `deploy` ali združi naslednji pull request. Po uspehu se javni URL prikaže pri namestitvi, nato ga dodaj v README. [Render API](https://render.com/docs/api)
+
+Vue se zgradi z `VITE_API_URL=/`. Apache na istem javnem izvoru postreže Vue in posreduje zahteve Laravelu. Tako Sanctum uporablja sejne piškotke na isti domeni.
 
 | Spremenljivke na Renderju | Vrednosti |
 | --- | --- |

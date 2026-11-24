@@ -2,9 +2,10 @@ import axios, { AxiosError } from 'axios'
 
 /**
  * Axios s sejnim piškotkom in žetonom CSRF (Laravel Sanctum).
- * Vse zahteve gredo na isti izvor, Vite jih posreduje API-ju.
+ * Privzeto gredo zahteve na isti izvor, Vite jih lokalno posreduje API-ju.
  */
 export const http = axios.create({
+  baseURL: import.meta.env.VITE_API_URL ?? '/',
   withCredentials: true,
   withXSRFToken: true,
   headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
