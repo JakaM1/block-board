@@ -72,7 +72,7 @@ onMounted(async () => {
       <div class="flex justify-between"><dt class="text-muted">Okvara</dt><dd>{{ source.data.title }}</dd></div>
       <div class="flex justify-between"><dt class="text-muted">Stanje</dt><dd>{{ source.data.status_label }}</dd></div>
       <div class="flex justify-between border-t border-line pt-3 font-semibold">
-        <dt>Strošek popravila</dt><dd class="font-mono">{{ formatMoney(source.data.cost_cents) }}</dd>
+        <dt>Strošek popravila</dt><dd class="font-mono">{{ formatMoney(source.data.cost_cents ?? 0) }}</dd>
       </div>
       <RouterLink :to="`/okvare/${source.data.id}`" class="btn btn-secondary mt-2 w-full">Odpri prijavo</RouterLink>
     </dl>

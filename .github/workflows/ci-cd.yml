@@ -1,0 +1,161 @@
+name: CI/CD
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: blockboard_test
+          POSTGRES_USER: blockboard
+          POSTGRES_PASSWORD: ci-test-password
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U blockboard -d blockboard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${{ job.services.postgres.ports[5432] }}
+      DB_USERNAME: blockboard
+      DB_PASSWORD: ci-test-password
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, gd, zip
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Lint PHP
+        run: git ls-files -z -- '*.php' | xargs -0 -n1 php -l
+      - name: Prepare Laravel
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - run: vendor/bin/pest
+
+  image:
+    name: Production image
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: blockboard
+          POSTGRES_USER: blockboard
+          POSTGRES_PASSWORD: ci-test-password
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U blockboard -d blockboard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build Docker image
+        run: docker build -f docker/production/Dockerfile -t blockboard-ci .
+      - name: Smoke test the production image
+        env:
+          DB_PORT: ${{ job.services.postgres.ports[5432] }}
+        run: |
+          set -euo pipefail
+          docker run --detach --name blockboard-ci --network host \
+            -e "APP_KEY=base64:$(openssl rand -base64 32)" \
+            -e APP_URL=http://127.0.0.1:10000 -e SANCTUM_STATEFUL_DOMAINS=127.0.0.1:10000 \
+            -e DB_CONNECTION=pgsql -e DB_HOST=127.0.0.1 -e DB_PORT \
+            -e DB_DATABASE=blockboard -e DB_USERNAME=blockboard -e DB_PASSWORD=ci-test-password \
+            blockboard-ci
+          trap 'docker logs blockboard-ci; docker rm --force blockboard-ci' EXIT
+          base=http://127.0.0.1:10000
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 2 "$base/up" > /dev/null
+          for path in / /najemi/1; do
+            curl --fail --silent --show-error "$base$path" | grep -F '<div id="app"></div>'
+          done
+          curl --fail --silent --show-error "$base/sanctum/csrf-cookie" > /dev/null
+          status=$(curl --silent --show-error --header 'Accept: application/json' \
+            --output /dev/null --write-out '%{http_code}' "$base/api/me")
+          test "$status" = 401
+
+  deploy:
+    name: Deploy to Render
+    needs: [frontend, backend, image]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    concurrency:
+      group: blockboard-production
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+    steps:
+      - name: Deploy the verified commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [[ "$GITHUB_SHA" != "$latest_sha" ]]; then
+            echo "A newer commit is on main. Skipping this deployment."
+            exit 0
+          fi
+
+          if [[ -z "$RENDER_API_KEY" || -z "$RENDER_SERVICE_ID" ]]; then
+            echo "::error::Configure RENDER_API_KEY and RENDER_SERVICE_ID in the production environment."
+            exit 1
+          fi
+
+          render_api() {
+            curl --fail --silent --show-error --max-time 30 \
+              --header "Authorization: Bearer $RENDER_API_KEY" "$@"
+          }
+
+          endpoint="https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys"
+          payload=$(jq -nc --arg sha "$GITHUB_SHA" '{commitId: $sha}')
+          deploy_id=$(render_api --json "$payload" "$endpoint" | jq -er '.id')
+
+          for attempt in {1..80}; do
+            status=$(render_api "$endpoint/$deploy_id" | jq -er '.status')
+            echo "Render deployment status: $status"
+            case "$status" in
+              live) exit 0 ;;
+              build_failed|pre_deploy_failed|update_failed|canceled|deactivated) exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo "::error::Render did not finish deploying within the polling window."
+          exit 1

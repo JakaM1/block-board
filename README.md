@@ -32,6 +32,7 @@ Dokumentacija je v direktoriju [docs/](docs/):
 4. [Arhitektura in tehnološki sklad](docs/04-arhitektura-in-tehnoloski-sklad.md)
 5. [Uporabniške zgodbe](docs/05-uporabniske-zgodbe.md)
 6. [Wireframes](docs/06-wireframes.md)
+7. [Pregled prevzetega projekta](docs/07-pregled-projekta.md)
 
 ### Arhitekturne odločitve (ADR)
 
@@ -115,6 +116,28 @@ Testi backenda uporabljajo ločeno bazo `blockboard_test`, ki se ustvari ob prve
 ## Razvojni proces
 
 Veja `main` je zaščitena. Spremembe se razvijajo na ločenih vejah in se v `main` združijo prek pull requesta. Prisilno prepisovanje zgodovine in brisanje veje `main` nista dovoljena.
+
+## CI/CD
+
+GitHub Actions ob vsakem pushu in pull requestu izvede ESLint, preverjanje sintakse PHP, gradnjo Vue in produkcijske Docker slike ter teste Vitest in Pest. Produkcijska slika se za preverjanje zagona zažene s svežo bazo PostgreSQL. Uspešen cikel na veji `main` prek API-ja Render namesti preverjeni commit in počaka na stanje `live`.
+
+### Nastavitev Render
+
+1. Ustvari Render PostgreSQL in plačljivo spletno storitev **Web Service** v isti regiji. Uporabi okolje **Docker**, repozitorij svojega forka, vejo `main`, Dockerfile `docker/production/Dockerfile` in koren repozitorija kot kontekst gradnje. Izklopi **Auto-Deploy** in nastavi zdravstveni pregled na `/up`. [Docker na Renderju](https://render.com/docs/docker)
+2. Storitvi dodaj trajni disk, priklopljen na `/var/www/backend/storage/app/private`, da fotografije okvar ostanejo dostopne po ponovni namestitvi. Uporabi eno instanco, na kateri tečejo Apache, delavec vrste in razporejevalnik. [Trajni diski](https://render.com/docs/disks)
+3. V Renderju nastavi okoljske spremenljivke iz spodnje tabele. Aplikacija ob zagonu izvede migracije. Prvič v bazi pripravi dejanske podatke o stavbi, stanovanjih in lastniku z vlogo `landlord` v tabeli članstev. Demo podatki iz lokalnega seederja imajo znana gesla, zato naj ostanejo v lokalnem okolju.
+4. V forku v **Settings → Environments** ustvari okolje `production` in mu dovoli namestitve z veje `main`. Dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Če je `main` ob povezavi storitve že posodobljen, zaženi **CI/CD → Run workflow** za `main` in preveri rezultat opravila **Deploy to Render**. [Render API](https://render.com/docs/api)
+
+| Spremenljivke na Renderju | Vrednosti |
+| --- | --- |
+| `PORT` | `10000` |
+| `APP_KEY` | Stabilen ključ Laravel, ustvarjen z `php artisan key:generate --show`. |
+| `APP_URL`, `FRONTEND_URL` | Javni naslov storitve HTTPS, npr. `https://blockboard.onrender.com`. |
+| `SANCTUM_STATEFUL_DOMAINS`, `SESSION_SECURE_COOKIE` | Javna domena brez `https://`, npr. `blockboard.onrender.com`, ter `true`. |
+| `APP_NAME`, `APP_LOCALE`, `APP_TIMEZONE` | `BlockBoard`, `sl`, `Europe/Ljubljana`. |
+| `DB_CONNECTION`, `DB_URL` | `pgsql` ter interni povezovalni URL baze PostgreSQL. |
+| `SESSION_DRIVER`, `QUEUE_CONNECTION`, `CACHE_STORE` | `database` za vse tri. |
+| `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | `smtp` in podatki ponudnika SMTP za povabila in obvestila. |
 
 ## Struktura repozitorija
 
