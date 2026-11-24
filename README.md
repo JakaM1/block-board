@@ -1,5 +1,7 @@
 # BlockBoard
 
+[![CI/CD](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/JakaM1/block-board/actions/workflows/ci-cd.yml)
+
 BlockBoard je spletna aplikacija za vodenje najemniške stavbe, v kateri ima vsa stanovanja en lastnik. Na enem mestu vodi celotno najemno razmerje, od vselitve do vračila varščine:
 
 - najeme z življenjskim ciklom in več sostanovalci,
@@ -32,6 +34,7 @@ Dokumentacija je v direktoriju [docs/](docs/):
 4. [Arhitektura in tehnološki sklad](docs/04-arhitektura-in-tehnoloski-sklad.md)
 5. [Uporabniške zgodbe](docs/05-uporabniske-zgodbe.md)
 6. [Wireframes](docs/06-wireframes.md)
+7. [Pregled prevzetega projekta](docs/07-pregled-projekta.md)
 
 ### Arhitekturne odločitve (ADR)
 
@@ -115,6 +118,37 @@ Testi backenda uporabljajo ločeno bazo `blockboard_test`, ki se ustvari ob prve
 ## Razvojni proces
 
 Veja `main` je zaščitena. Spremembe se razvijajo na ločenih vejah in se v `main` združijo prek pull requesta. Prisilno prepisovanje zgodovine in brisanje veje `main` nista dovoljena.
+
+## CI/CD
+
+Workflow se sproži ob pull requestu v `main` in ob pushu na `main`. Za združitev so obvezna opravila `lint`, `build` in `test`.
+
+| Opravilo | Kaj izvede |
+| --- | --- |
+| `lint` | Preveri Vue in TypeScript z ESLint ter PHP z Laravel Pint. |
+| `build` | Zgradi Vue in zapakira Laravel z odvisnostmi v Docker sliko. Po poskusnem zagonu s PostgreSQL shrani sliko v artefakt `blockboard-image`. Gradnje ponovno uporabijo predpomnjene Docker plasti. |
+| `test` | Zažene Vitest in Pest s testno bazo PostgreSQL. Poročili o pokritosti shrani v artefakt `coverage`. Namestitvi odvisnosti uporabljata predpomnilnika npm in Composer. |
+| `deploy` | Samo ob pushu na `main` po uspešnih preverjanjih prenese artefakt `blockboard-image`, ga objavi v GHCR in Renderju posreduje digest slike. Po stanju `live` preveri javni naslov in ga objavi v [okolju production](https://github.com/JakaM1/block-board/deployments/production). |
+
+### Nastavitev Render
+
+1. Po prvi združitvi v `main` opravilo `deploy` objavi sliko `ghcr.io/jakam1/block-board:<SHA>`. Ustvari Render PostgreSQL in plačljivo spletno storitev **Web Service** v isti regiji. Kot vir izberi **Existing Image** in uporabi URL te slike. Renderju omogoči branje slike z žetonom GitHub s pravico `read:packages` ali paket v GHCR nastavi kot javen. Nastavi zdravstveni pregled na `/up`. [Predpripravljene slike na Renderju](https://render.com/docs/deploying-an-image)
+2. Storitvi dodaj trajni disk, priklopljen na `/var/www/backend/storage/app/private`, da fotografije okvar ostanejo dostopne po ponovni namestitvi. Uporabi eno instanco, na kateri tečejo Apache, delavec vrste in razporejevalnik. [Trajni diski](https://render.com/docs/disks)
+3. V Renderju nastavi okoljske spremenljivke iz spodnje tabele. Aplikacija ob zagonu izvede migracije. Prvič v bazi pripravi dejanske podatke o stavbi, stanovanjih in lastniku z vlogo `landlord` v tabeli članstev. Demo podatki iz lokalnega seederja imajo znana gesla, zato naj ostanejo v lokalnem okolju.
+4. V okolju `production` v forku dodaj skrivnost `RENDER_API_KEY` in spremenljivko `RENDER_SERVICE_ID` z identifikatorjem spletne storitve (`srv-…`). Nato v prvem zagonu za `main` ponovno zaženi opravilo `deploy` ali združi naslednji pull request. Po uspehu se javni URL prikaže pri namestitvi, nato ga dodaj v README. [Render API](https://render.com/docs/api)
+
+Vue se zgradi z `VITE_API_URL=/`. Apache na istem javnem izvoru postreže Vue in posreduje zahteve Laravelu. Tako Sanctum uporablja sejne piškotke na isti domeni.
+
+| Spremenljivke na Renderju | Vrednosti |
+| --- | --- |
+| `PORT` | `10000` |
+| `APP_KEY` | Stabilen ključ Laravel, ustvarjen z `php artisan key:generate --show`. |
+| `APP_URL`, `FRONTEND_URL` | Javni naslov storitve HTTPS, npr. `https://blockboard.onrender.com`. |
+| `SANCTUM_STATEFUL_DOMAINS`, `SESSION_SECURE_COOKIE` | Javna domena brez `https://`, npr. `blockboard.onrender.com`, ter `true`. |
+| `APP_NAME`, `APP_LOCALE`, `APP_TIMEZONE` | `BlockBoard`, `sl`, `Europe/Ljubljana`. |
+| `DB_CONNECTION`, `DB_URL` | `pgsql` ter interni povezovalni URL baze PostgreSQL. |
+| `SESSION_DRIVER`, `QUEUE_CONNECTION`, `CACHE_STORE` | `database` za vse tri. |
+| `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | `smtp` in podatki ponudnika SMTP za povabila in obvestila. |
 
 ## Struktura repozitorija
 

@@ -8,6 +8,7 @@ use App\Models\Building;
 use App\Models\Charge;
 use App\Models\Lease;
 use App\Services\ChargeGenerator;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 beforeEach(function () {
@@ -106,7 +107,7 @@ it('za najem z začetkom med mesecem na dan začetka ustvari sorazmerni del', fu
 });
 
 it('sorazmerni del upošteva dejansko število dni v mesecu', function (string $date, int $expected) {
-    expect($this->generator->proratedAmount(30000, \Carbon\CarbonImmutable::parse($date)))->toBe($expected);
+    expect($this->generator->proratedAmount(30000, CarbonImmutable::parse($date)))->toBe($expected);
 })->with([
     '16. maj (31 dni)' => ['2027-05-16', 15484],
     '15. februar 2027 (28 dni)' => ['2027-02-15', 15000],

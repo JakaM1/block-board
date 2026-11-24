@@ -8,6 +8,7 @@ use App\Models\Building;
 use App\Models\Charge;
 use App\Models\Lease;
 use App\Models\UtilityBill;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     $this->travelTo('2026-10-05 10:00');
@@ -24,7 +25,7 @@ beforeEach(function () {
     $this->leaseB = Lease::factory()->for($this->b)->withTenants([40000])->create(['status' => LeaseStatus::Active, 'starts_on' => '2026-01-01']);
 });
 
-function buildingBill(string $method, int $amount = 30000, string $action = ''): \Illuminate\Testing\TestResponse
+function buildingBill(string $method, int $amount = 30000, string $action = ''): TestResponse
 {
     return test()->actingAs(test()->landlord)->postJson('/api/buildings/'.test()->building->id.'/utility-bills'.$action, [
         'scope' => 'building',

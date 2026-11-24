@@ -1,0 +1,13 @@
+.git
+.github
+docs
+frontend/node_modules
+frontend/dist
+frontend/coverage
+backend/vendor
+backend/coverage
+backend/.env*
+backend/bootstrap/cache/*.php
+backend/storage/app/private/*
+backend/storage/framework/
+backend/storage/logs/*

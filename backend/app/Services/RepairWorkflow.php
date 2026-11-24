@@ -12,7 +12,6 @@ use App\Models\Attachment;
 use App\Models\Building;
 use App\Models\Charge;
 use App\Models\LeaseTenant;
-use App\Support\Dates;
 use App\Models\RepairCategory;
 use App\Models\RepairEvent;
 use App\Models\RepairRequest;
@@ -23,9 +22,11 @@ use App\Notifications\RepairReported;
 use App\Notifications\RepairReturned;
 use App\Notifications\RepairScheduled;
 use App\Notifications\RepairStatusChanged;
+use App\Support\Dates;
 use App\Support\Money;
 use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -204,7 +205,7 @@ class RepairWorkflow
     /**
      * Najemniki, ki jim lahko lastnik ob zaključku zaračuna popravilo, s privzeto izbiro (US-12, #129).
      *
-     * @return \Illuminate\Support\Collection<int, array{tenant: LeaseTenant, default: bool}>
+     * @return Collection<int, array{tenant: LeaseTenant, default: bool}>
      */
     public function payerCandidates(RepairRequest $repair)
     {

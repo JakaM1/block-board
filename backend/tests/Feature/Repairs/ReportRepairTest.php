@@ -15,6 +15,7 @@ use App\Notifications\RepairReported;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     Storage::fake('local');
@@ -39,7 +40,7 @@ beforeEach(function () {
     }
 });
 
-function reportRepair($user, array $overrides = []): \Illuminate\Testing\TestResponse
+function reportRepair($user, array $overrides = []): TestResponse
 {
     return test()->actingAs($user)->post('/api/buildings/'.test()->building->id.'/repair-requests', [
         'title' => 'Bojler ne greje vode',

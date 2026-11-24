@@ -11,6 +11,7 @@ use App\Models\Lease;
 use App\Models\Membership;
 use App\Models\SharedSpace;
 use Illuminate\Database\QueryException;
+use Illuminate\Testing\TestResponse;
 
 beforeEach(function () {
     // Sreda, 21. 10. 2026 (kot v wireframu WF-02).
@@ -33,7 +34,7 @@ beforeEach(function () {
     }
 });
 
-function book($tenant, string $start, string $end): \Illuminate\Testing\TestResponse
+function book($tenant, string $start, string $end): TestResponse
 {
     return test()->actingAs($tenant->user)->postJson('/api/shared-spaces/'.test()->space->id.'/bookings', [
         'starts_at' => $start, 'ends_at' => $end,

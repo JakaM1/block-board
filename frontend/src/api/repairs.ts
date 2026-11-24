@@ -9,7 +9,7 @@ export interface TimelineEvent {
   from_status: RepairStatus | null
   to_status: RepairStatus
   note: string | null
-  meta: Record<string, any> | null
+  meta: { from?: Payer; payer?: Payer } | null
   user: string
   created_at: string
 }
@@ -74,7 +74,7 @@ export const STEPS: { status: RepairStatus; label: string }[] = [
 /** Naslov koraka v časovnici. */
 export function eventTitle(event: TimelineEvent): string {
   if (event.kind === 'payer') {
-    const label = (p: string) => (p === 'tenant' ? 'najemnik' : 'lastnik')
+    const label = (payer?: Payer) => (payer === 'tenant' ? 'najemnik' : 'lastnik')
     return event.meta?.from
       ? `Plačnik: ${label(event.meta.from)} → ${label(event.meta.payer)}`
       : `Privzeti plačnik: ${label(event.meta?.payer)}`

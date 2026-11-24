@@ -26,10 +26,45 @@ export interface ChargeMonth {
   charges: Charge[]
 }
 
-export interface ChargeSource {
-  type: 'utility' | 'booking' | 'repair'
-  data: Record<string, any>
-}
+export type ChargeSource =
+  | {
+      type: 'utility'
+      data: {
+        bill: {
+          id: number
+          type_label: string
+          amount_cents: number
+          period_start: string
+          period_end: string
+          scope: 'building' | 'apartment'
+          split_method_label: string | null
+        }
+        apartment: { label: string; share_cents: number; days: number }
+        tenant: { days: number; amount_cents: number }
+      }
+    }
+  | {
+      type: 'booking'
+      data: {
+        id: number
+        space_name: string
+        starts_at: string
+        ends_at: string
+        hours: number
+        price_per_hour_cents: number
+        fee_cents: number
+      }
+    }
+  | {
+      type: 'repair'
+      data: {
+        id: number
+        number: string
+        title: string
+        status_label: string
+        cost_cents: number | null
+      }
+    }
 
 export const chargesApi = {
   mine: (buildingId?: number | null) =>
