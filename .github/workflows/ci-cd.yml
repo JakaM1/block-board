@@ -46,7 +46,6 @@ jobs:
           --health-retries 10
     env:
       DB_HOST: 127.0.0.1
-      DB_PORT: ${{ job.services.postgres.ports[5432] }}
       DB_USERNAME: blockboard
       DB_PASSWORD: ci-test-password
     steps:
@@ -65,6 +64,8 @@ jobs:
           cp .env.example .env
           php artisan key:generate
       - run: vendor/bin/pest
+        env:
+          DB_PORT: ${{ job.services.postgres.ports['5432'] }}
 
   image:
     name: Production image
@@ -89,7 +90,7 @@ jobs:
         run: docker build -f docker/production/Dockerfile -t blockboard-ci .
       - name: Smoke test the production image
         env:
-          DB_PORT: ${{ job.services.postgres.ports[5432] }}
+          DB_PORT: ${{ job.services.postgres.ports['5432'] }}
         run: |
           set -euo pipefail
           docker run --detach --name blockboard-ci --network host \
